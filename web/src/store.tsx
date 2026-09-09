@@ -36,6 +36,9 @@ import {
 
 export type Theme = "dark" | "light";
 
+/** What the reader can open. Anything else is filed but not opened. */
+const READABLE = [".pptx", ".ppt", ".pdf", ".docx", ".md"];
+
 export interface DeckState {
   deck: Deck;
   progress: Progress;
@@ -397,6 +400,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       openItem: async (item) => {
         if (item.missing) {
           setError(`${item.name} 的文件已经不在原来的位置了。`);
+          return;
+        }
+        // Course material the reader cannot read is still filed here on
+        // purpose. Say so instead of opening an empty tab.
+        if (!item.readable) {
+          setError(
+            `${item.name}.${item.format} 打不开：只支持 ` +
+              `${READABLE.join("、")}。可以右键在访达里打开它。`,
+          );
           return;
         }
         await openPaths([item.path]);

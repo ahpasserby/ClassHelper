@@ -724,7 +724,10 @@ select.field { cursor: pointer; }
 .tree-row.selected, .inbox-row.selected {
   background: var(--accent); color: #fff;
 }
-.tree-row.selected .tree-count, .inbox-row.selected .inbox-format { color: #fff; }
+.tree-row.selected .tree-count { color: #fff; }
+.tree-row.selected .file-ext, .inbox-row.selected .file-ext {
+  color: #fff; border-color: rgba(255, 255, 255, 0.45);
+}
 
 .tree-row.editing { padding-right: 8px; }
 .tree-input {
@@ -973,3 +976,21 @@ select.field { cursor: pointer; }
 /* Drawn icons, at the weight of the text beside them. */
 .tree-icon .icon, .icon { display: block; flex: 0 0 auto; opacity: 0.75; }
 .tree-row .tree-icon { display: flex; align-items: center; }
+
+/* Course material the reader cannot open. Filed like everything else, and
+   visibly not a deck -- the extension is shown so it is obvious why. */
+.tree-row.unreadable .tree-name, .inbox-row.unreadable .inbox-name,
+tr.unreadable .item-name { opacity: 0.6; }
+.tree-row.unreadable .icon, .inbox-row.unreadable .icon { opacity: 0.4; }
+/* The format, as a small tag after the name. Names are shown without their
+   extension, so this is where it lives. */
+.file-ext {
+  margin-left: 6px; font-size: 10px; line-height: 16px; color: var(--fg-muted);
+  border: 1px solid var(--border); border-radius: 3px; padding: 0 4px;
+  text-transform: uppercase; flex: 0 0 auto; letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.inbox-row .file-ext { margin-left: 0; margin-right: 8px; }
+.item-format .file-ext { margin-left: 0; }
+tr.unreadable .file-ext, .tree-row.unreadable .file-ext,
+.inbox-row.unreadable .file-ext { opacity: 0.7; }

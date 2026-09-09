@@ -65,7 +65,7 @@ export interface Page {
 
 /** Whether the slide view can show the file itself. See render.py. */
 export interface SourceStatus {
-  mode: "exact" | "building" | "approximate";
+  mode: "exact" | "building" | "approximate" | "none";
   detail: string;
 }
 
@@ -108,6 +108,8 @@ export interface BoardItem {
   /** The file was moved or deleted on disk after being filed. */
   missing: boolean;
   format: string;
+  /** False for course material the reader cannot open, which is still listed. */
+  readable: boolean;
 }
 
 export interface BoardData {

@@ -17,6 +17,9 @@ extraResources:
 
 mac:
   category: public.app-category.education
+  # Drawn by scripts/build_icon.py. Full bleed on purpose: macOS applies its
+  # own rounded mask, and artwork with corners of its own gets rounded twice.
+  icon: build/icon.icns
   # Apple Silicon only. The Python server travels with the app as a binary
   # frozen by PyInstaller, which does not cross-compile -- an x64 build made
   # here would ship an arm64 server and fail on the machine it was built for.
@@ -24,8 +27,16 @@ mac:
     - target: dmg
       arch: [arm64]
   artifactName: ${productName}-${version}-mac-${arch}.${ext}
-  # The sidecar is an unsigned helper binary; without this the hardened runtime
-  # refuses to execute it.
+  # Signed ad hoc. There is no Apple Developer ID here, but "unsigned" is not
+  # an option on Apple Silicon: injecting the Python server into Resources
+  # invalidates the signature Electron ships with, and macOS reports an app
+  # whose seal does not match as *damaged* rather than merely unidentified --
+  # a dialog with no "open anyway" in it. An ad-hoc signature covering the
+  # finished bundle puts it back to being an app from an unidentified
+  # developer, which the user can allow.
+  identity: "-"
+  # The sidecar is a helper binary; without these the hardened runtime refuses
+  # to execute it.
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist

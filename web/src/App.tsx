@@ -286,7 +286,7 @@ function Workspace() {
       </div>
       {dragging && (
         <div className="drop-overlay">
-          <div>松手导入到暂存区（.pptx / .pdf）</div>
+          <div>松手导入到暂存区</div>
         </div>
       )}
       <StatusBar />

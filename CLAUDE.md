@@ -12,10 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .venv/bin/classhelper inspect FILE      # what was extracted, and why — no API calls
 .venv/bin/classhelper inspect FILE --hidden --sentences   # + furniture, reasons, units
 
-cd web && npm test                      # the scroll-sync logic; no framework, no deps
+cd web && npm test                      # sync, selection and copy logic; no framework
 cd desktop && npm run dev               # build the shell and run the app
 cd desktop && npm run pack              # renderer, then sidecar, then the .app
 cd desktop && npm run watch             # rebuild the UI on save, app already running
+.venv/bin/python scripts/build_icon.py  # redraw the app icon into an .icns
 ```
 
 `inspect` is the first thing to run when a deck reads badly: translation quality
@@ -31,7 +32,7 @@ nothing downstream knows which format it came from.
 
 ```
 parsers/ ──→ classify.py ──→ segment.py ──→ translate.py ──→ server/ ──→ web/
- pptx,pdf     what is this?   into units     page at a time   sessions    reader
+ 5 formats    what is this?   into units     page at a time   sessions    reader
                                              + glossary       + SSE
                                                   │
                           render.py ──────────────┼──→ pricing.py ──→ spend.py
@@ -128,6 +129,30 @@ snapshotting, never after.
 **The price table is a file the user may edit.** `Table` re-reads it when the
 mtime changes; read once at startup, a hand-corrected price would not take
 effect until the next launch.
+
+**A course folder is not only decks.** The board lists every file in it -- a
+syllabus, a dataset, a zip -- because it is a real directory and hiding things
+would make it disagree with the Finder. `Item.readable` says whether the reader
+can open one; filing, moving and rescuing on delete all work regardless.
+
+**A document has no pages, so the parser invents them.** Markdown splits on a
+thematic break if the file uses them and on top-level headings otherwise; a
+.docx splits on explicit page breaks, else on Heading 1. Neither invents a
+break in continuous prose -- one long page is the honest answer.
+
+**python-docx drops OMML too**, exactly as python-pptx does, so `docx_parser`
+walks the XML in document order for the same reason `pptx_parser` does. A
+handout whose formulae have silently vanished is worse than one that fails to
+open.
+
+**`.ppt` is a compound binary, not a zip.** Nothing in Python reads it, so it
+is converted once by LibreOffice and read as .pptx. Without LibreOffice the
+error names the install and the alternative rather than saying "unsupported".
+
+**A format that records no positions has no approximation to fall back on.** A
+.docx knows its text and nothing about where it sat, so the slide pane reports
+`none` rather than drawing a picture of nothing; a .pptx, which does record
+boxes, still falls back to the drawing.
 
 **Nothing outside the app can be assumed not to have happened.** The board is
 a directory tree people rearrange in the Finder, which is the point of it being
@@ -250,6 +275,19 @@ and a fresh install wrote its own defaults and came up reporting itself
 configured. `Settings.tsx` compares the form against `stored`, a signature of
 what was loaded or last saved: no difference, no write, whatever order the
 renders arrive in.
+
+**An unsigned bundle is reported as *damaged*, not as unsigned.** Injecting the
+Python server into `Contents/Resources` invalidates the signature Electron
+ships with, and macOS refuses a broken seal with a dialog that has no way past
+it. `identity: "-"` in electron-builder re-signs the finished bundle ad hoc,
+which puts it back to being merely unidentified -- something the user can
+allow. Nothing here can be notarised without a paid Developer ID.
+
+**The icon is code, not an asset.** `scripts/build_icon.py` draws it at every
+size macOS asks for rather than scaling one bitmap down. Full bleed on purpose:
+macOS applies its own rounded mask, so artwork with corners of its own is
+rounded twice. An adaptive light/dark icon would need Icon Composer and
+`actool`, which require full Xcode.
 
 **Build the renderer before the sidecar.** `build_sidecar.py` freezes
 `src/classhelper/web` into the binary, so `npm run pack` running them the other

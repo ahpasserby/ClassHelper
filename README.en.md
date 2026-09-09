@@ -15,8 +15,8 @@
 
 ---
 
-Takes `.pptx` and `.pdf`. Each sentence gets its translation directly
-underneath, so the two always line up.
+Takes `.pptx`, `.ppt`, `.pdf`, `.docx` and `.md`. Each sentence gets its
+translation directly underneath, so the two always line up.
 
 The target language is a setting: English to Chinese is only the default.
 
@@ -37,6 +37,9 @@ The target language is a setting: English to Chinese is only the default.
   globally, per semester, or per course.
 - **Board.** Semesters and courses as real directories. Rearrange them in the
   Finder and the app notices within two seconds.
+- **Other course material is listed too.** A syllabus, a dataset, a zip of
+  starter code: shown on the board with its format, filed like anything else,
+  and honest about not being openable.
 - **Cost.** A running total in yuan in the status bar, priced from the
   provider's own published rates.
 - **Cache.** Translations live beside the deck, so reopening it is instant and
@@ -53,13 +56,16 @@ Download `ClassHelper-*-mac-arm64.dmg` from
 [Releases](https://github.com/ahpasserby/ClassHelper/releases/latest) and drag
 the app into Applications.
 
-macOS (Apple Silicon) only for now. The app is not signed by Apple, so the
-first launch is blocked: **right-click the icon in Applications, choose Open,
-then Open again in the dialog.** Or from a terminal:
+macOS (Apple Silicon) only for now. The app is signed ad hoc but not notarised
+by Apple, so the first launch is blocked. The quickest way through is one
+command:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/ClassHelper.app
 ```
+
+Or open it, let it be blocked, then go to System Settings > Privacy & Security
+and click "Open Anyway" at the bottom.
 
 ## Setup
 
@@ -74,15 +80,15 @@ because translating a whole deck costs a few cents.
 | Target language | `zh-CN` by default; `en`, `ja` and so on all work |
 | Data directory | Decks, glossaries and caches all live under it |
 
-For real slide images from `.pptx`, install LibreOffice and the app will borrow
-it:
+`.ppt` needs LibreOffice to be read at all; `.pptx` and `.docx` need it to be
+shown at their real layout:
 
 ```bash
 brew install --cask libreoffice
 ```
 
-Without it you get a reconstruction drawn from the extracted layout, and the
-panel says so.
+Without it a `.pptx` is drawn from the extracted layout and the panel says so.
+Markdown has no page to show, only its text.
 
 ## Privacy
 
@@ -126,7 +132,7 @@ To see what was extracted from a deck, without spending anything:
 | Path | What lives there |
 | --- | --- |
 | `model.py` | The format-agnostic document model |
-| `parsers/` | `.pptx` and `.pdf` readers |
+| `parsers/` | pptx, pdf, docx and md readers, plus the converted ppt |
 | `classify.py` | Deciding what each block is |
 | `segment.py` | Splitting text into translation units |
 | `translate.py` | Page-at-a-time translation and alignment checks |

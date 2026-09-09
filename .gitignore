@@ -20,6 +20,10 @@ desktop/resources/
 # A convenience symlink to the packaged app.
 /classhelper.app
 
+# Scratch renders from scripts/build_icon.py.
+desktop/build/icon-preview.*
+desktop/build/*.iconset/
+
 # Never commit secrets or course material.
 config.toml
 config.toml.bak

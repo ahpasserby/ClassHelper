@@ -75,6 +75,8 @@ def item_payload(item) -> dict:
         "folder": str(Path(item.path).parent) if "/" in item.path else None,
         "missing": item.missing,
         "format": item.format,
+        # Course material the reader cannot open is still filed on the board.
+        "readable": item.readable,
     }
 
 

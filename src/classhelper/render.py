@@ -8,14 +8,17 @@ somewhere, at its own proportions, next to the translation.
 For a PDF that is free: the file is already a picture of itself and PyMuPDF
 rasterises a page in a few dozen milliseconds.
 
-A .pptx is not. Rendering one properly means implementing PowerPoint, so the
-only honest options are to hand it to something that already has (LibreOffice,
-if it happens to be installed) or to draw an approximation from what the parser
-extracted -- every text box and picture at its real position and size, which is
-enough to point at a bullet even though it is not the slide. The reader does
-the second one itself, in SVG, from data it already has; this module reports
-which of the two is on offer so the UI can say so plainly rather than showing a
+An Office file is not. Rendering one properly means implementing PowerPoint, so
+the only honest options are to hand it to something that already has
+(LibreOffice, if it happens to be installed) or to draw an approximation from
+what the parser extracted -- every text box and picture at its real position
+and size, which is enough to point at a bullet even though it is not the slide.
+The reader does the second one itself, from data it already has; this module
+reports which is on offer so the UI can say so plainly rather than showing a
 crude drawing as though it were the file.
+
+Markdown has no third option: there is no page to be a picture of, so the
+answer is "none" and the reader shows the text alone.
 
 Nothing here ever blocks a request for long: a LibreOffice conversion takes
 seconds, so it runs on a thread and the reader shows the approximation until it
@@ -52,6 +55,12 @@ _CONVERT_TIMEOUT = 180.0
 _MAX_WIDTH = 2400
 _MIN_WIDTH = 200
 
+# Formats with no page of their own to show.
+_NO_SOURCE_VIEW = {".md", ".markdown"}
+# Formats LibreOffice can render exactly but whose parser records no positions,
+# so there is no approximation to fall back to.
+_NO_GEOMETRY = {".docx", ".doc"}
+
 
 def find_soffice() -> str | None:
     found = shutil.which("soffice") or shutil.which("libreoffice")
@@ -78,6 +87,7 @@ class Source:
     # "exact"        -- pages come from the file itself
     # "building"     -- a conversion is running; approximate until it lands
     # "approximate"  -- the reader draws it from the extracted geometry
+    # "none"         -- the format has no pages to show
     mode: str = "approximate"
     detail: str = ""
     pdf: Path | None = None
@@ -98,9 +108,15 @@ class Renderer:
 
     def _prepare(self) -> None:
         path = self.source.path
-        if path.suffix.lower() == ".pdf":
+        suffix = path.suffix.lower()
+        if suffix == ".pdf":
             self.source.mode = "exact"
             self.source.pdf = path
+            return
+
+        if suffix in _NO_SOURCE_VIEW:
+            self.source.mode = "none"
+            self.source.detail = "这个格式没有版面，只有正文。"
             return
 
         cached = self._converted_path()
@@ -110,6 +126,15 @@ class Renderer:
             return
 
         if find_soffice() is None:
+            if suffix in _NO_GEOMETRY:
+                # A Word document has no recorded positions, so there is nothing
+                # to draw an approximation from -- a drawing made up here would
+                # be a picture of nothing.
+                self.source.mode = "none"
+                self.source.detail = (
+                    "装上 LibreOffice 就能在这里显示原文档的排版。"
+                )
+                return
             self.source.mode = "approximate"
             self.source.detail = (
                 "没装 LibreOffice，右边显示的是按原文位置还原的版式，不是幻灯片本身。"
@@ -149,8 +174,12 @@ class Renderer:
             produced.replace(target)
         except Exception as exc:  # noqa: BLE001 - falling back is the fix
             with self.source._lock:
-                self.source.mode = "approximate"
-                self.source.detail = f"没能转换成原图（{exc}），显示的是还原的版式。"
+                if self.source.path.suffix.lower() in _NO_GEOMETRY:
+                    self.source.mode = "none"
+                    self.source.detail = f"没能转换成原图（{exc}）。"
+                else:
+                    self.source.mode = "approximate"
+                    self.source.detail = f"没能转换成原图（{exc}），显示的是还原的版式。"
             return
         finally:
             shutil.rmtree(workdir, ignore_errors=True)

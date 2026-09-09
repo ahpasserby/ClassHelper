@@ -111,3 +111,50 @@ def test_a_deck_whose_pages_differ_in_size_keeps_each_pages_own_shape(client, tm
     deck = _open(client, str(path))
     wide, tall = deck["pages"][0]["aspect"], deck["pages"][1]["aspect"]
     assert wide > 1 > tall
+
+
+# -- formats with no page to show -------------------------------------------
+
+def test_markdown_has_no_source_view_and_says_so(client, tmp_path):
+    """There is no page to be a picture of. An empty frame would look broken;
+    saying so is the honest answer."""
+    notes = tmp_path / "notes.md"
+    notes.write_text("# One\n\nSome prose.\n", encoding="utf-8")
+
+    deck = _open(client, str(notes))
+    assert deck["source"]["mode"] == "none"
+    assert deck["source"]["detail"]
+    assert client.get(f"/api/deck/{deck['id']}/source/0").status_code == 404
+
+
+def test_a_word_document_without_libreoffice_offers_no_drawing(
+    client, tmp_path, monkeypatch
+):
+    """Word records no positions, so there is nothing to draw an approximation
+    from -- unlike a .pptx, where every box has a place on the slide."""
+    import zipfile
+
+    import classhelper.render as render_module
+
+    monkeypatch.setattr(render_module, "find_soffice", lambda: None)
+    W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    path = tmp_path / "handout.docx"
+    with zipfile.ZipFile(path, "w") as zf:
+        zf.writestr(
+            "word/document.xml",
+            f'<?xml version="1.0"?><w:document xmlns:w="{W}"><w:body>'
+            f"<w:p><w:r><w:t>Prose.</w:t></w:r></w:p></w:body></w:document>",
+        )
+
+    deck = _open(client, str(path))
+    assert deck["source"]["mode"] == "none"
+    assert "LibreOffice" in deck["source"]["detail"]
+
+
+def test_a_pptx_still_falls_back_to_a_drawing(client, deck_file, monkeypatch):
+    """The distinction is whether the parser recorded positions, not whether
+    LibreOffice is missing."""
+    import classhelper.render as render_module
+
+    monkeypatch.setattr(render_module, "find_soffice", lambda: None)
+    assert _open(client, deck_file)["source"]["mode"] == "approximate"

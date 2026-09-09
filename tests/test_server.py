@@ -205,8 +205,26 @@ def test_several_files_open_in_one_drop(client, deck_file):
     assert added[0]["id"] != added[1]["id"]
 
 
+def test_a_folder_of_mixed_files_is_filed_whole(client, deck_file):
+    """A course hands out more than decks. Everything is filed; the ones the
+    reader cannot open are marked, not refused."""
+    with open(deck_file, "rb") as handle:
+        data = handle.read()
+    response = client.post(
+        "/api/upload",
+        files=[
+            ("files", ("good.pptx", data, "application/octet-stream")),
+            ("files", ("syllabus.txt", b"weeks", "text/plain")),
+        ],
+    )
+    body = response.json()
+    assert [d["name"] for d in body["added"]] == ["good", "syllabus"]
+    assert body["failed"] == []
+    assert [d["readable"] for d in body["added"]] == [True, False]
+
+
 def test_one_bad_file_does_not_sink_the_rest(client, deck_file):
-    """Dropping a folder's worth of files should open what it can and say what
+    """Dropping a folder's worth of files should take what it can and say what
     it could not, rather than refusing the whole batch."""
     with open(deck_file, "rb") as handle:
         data = handle.read()
@@ -214,20 +232,30 @@ def test_one_bad_file_does_not_sink_the_rest(client, deck_file):
         "/api/upload",
         files=[
             ("files", ("good.pptx", data, "application/octet-stream")),
-            ("files", ("notes.txt", b"hello", "text/plain")),
+            ("files", ("empty.pdf", b"", "application/pdf")),
         ],
     )
     body = response.json()
     assert [d["name"] for d in body["added"]] == ["good"]
-    assert body["failed"][0]["name"] == "notes.txt"
+    assert body["failed"][0]["name"] == "empty.pdf"
 
 
 def test_a_drop_of_only_unusable_files_is_an_error(client):
     response = client.post(
         "/api/upload",
-        files={"files": ("notes.txt", b"hello", "text/plain")},
+        files={"files": ("empty.pptx", b"", "application/octet-stream")},
     )
     assert response.status_code == 422
+
+
+def test_opening_something_that_is_not_a_deck_says_so(client, tmp_path):
+    """It is on the board on purpose. Trying to read it has to fail in a way
+    that names the file and the formats that do work."""
+    other = tmp_path / "syllabus.txt"
+    other.write_text("weeks", encoding="utf-8")
+    response = client.post("/api/open", json={"path": str(other)})
+    assert response.status_code == 415
+    assert ".pdf" in response.json()["detail"]
 
 
 def test_dropping_the_same_name_twice_keeps_both(client, deck_file):

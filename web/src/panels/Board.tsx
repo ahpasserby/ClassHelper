@@ -80,7 +80,7 @@ function FolderRow({
   onDrop: (e: React.DragEvent) => void;
 }) {
   const [over, setOver] = useState(false);
-  const decks = countDecks(folder);
+  const { decks, others } = countFiles(folder);
 
   return (
     <tr
@@ -103,7 +103,8 @@ function FolderRow({
         {/* The total counts decks further down too: the point of the number is
             "is there anything in here", which a direct-children-only count
             would answer wrongly for a semester. */}
-        {decks > 0 ? `${decks} 份课件` : "空"}
+        {decks > 0 ? `${decks} 份课件` : others > 0 ? "" : "空"}
+        {others > 0 ? `${decks > 0 ? " · " : ""}${others} 份资料` : ""}
         {folder.children.length > 0 ? ` · ${folder.children.length} 个下级` : ""}
       </td>
     </tr>
@@ -117,10 +118,19 @@ function DeckRow({ item }: { item: BoardItem }) {
       draggable={!item.missing}
       onDragStart={(e) => e.dataTransfer.setData(DRAG_ITEMS, JSON.stringify([item.id]))}
       onDoubleClick={() => void store.openItem(item)}
-      className={item.missing ? "missing" : undefined}
-      title={item.missing ? item.path : "双击打开"}
+      className={
+        `${item.missing ? "missing " : ""}${item.readable ? "" : "unreadable"}`.trim() ||
+        undefined
+      }
+      title={
+        item.missing
+          ? item.path
+          : item.readable
+            ? "双击打开"
+            : "课程资料，打不开，可在访达里查看"
+      }
     >
-      <td className="item-format">{item.format}</td>
+      <td className="item-format"><span className="file-ext">{item.format}</span></td>
       <td className="item-name">
         {item.name}
         {item.missing && (
@@ -134,8 +144,19 @@ function DeckRow({ item }: { item: BoardItem }) {
   );
 }
 
-function countDecks(folder: BoardFolder): number {
-  return folder.items.length + folder.children.reduce((n, c) => n + countDecks(c), 0);
+/** Decks and other course material, counted separately -- they are not the same thing. */
+function countFiles(folder: BoardFolder): { decks: number; others: number } {
+  const here = folder.items.reduce(
+    (n, item) => ({
+      decks: n.decks + (item.readable ? 1 : 0),
+      others: n.others + (item.readable ? 0 : 1),
+    }),
+    { decks: 0, others: 0 },
+  );
+  return folder.children.reduce((n, child) => {
+    const below = countFiles(child);
+    return { decks: n.decks + below.decks, others: n.others + below.others };
+  }, here);
 }
 
 function Breadcrumb({

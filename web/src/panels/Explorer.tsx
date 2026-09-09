@@ -72,12 +72,15 @@ export function Explorer() {
   const [menu, setMenu] = useState<{ x: number; y: number; row: Row | null } | null>(null);
   const [dropping, setDropping] = useState(false);
 
-  // Start expanded: a collapsed tree hides the courses, and a course you cannot
-  // see is a course you cannot drop a deck onto.
+  // Open two levels to start with: semester, then course, so the folders
+  // inside a course are visible and can be dropped onto. Everything below that
+  // stays shut -- a term's worth of decks expanded at once is a wall of names,
+  // and a collapsed tree hides the courses, which is the other way to get it
+  // wrong.
   useEffect(() => {
     if (!board) return;
     setExpanded((current) =>
-      current.size > 0 ? current : new Set(flatten(board.folders).map((f) => f.id)),
+      current.size > 0 ? current : new Set(idsToDepth(board.folders, 2)),
     );
   }, [board]);
 
@@ -358,7 +361,7 @@ export function Explorer() {
                 key={item.id}
                 className={`inbox-row${item.missing ? " missing" : ""}${
                   selected.has(item.id) ? " selected" : ""
-                }`}
+                }${item.readable ? "" : " unreadable"}`}
                 draggable={!item.missing}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -376,9 +379,15 @@ export function Explorer() {
                     row: { kind: "file", id: item.id, depth: 0, item },
                   });
                 }}
-                title={item.missing ? item.path : "拖到上面归档 · 双击打开"}
+                title={
+                  item.missing
+                    ? item.path
+                    : item.readable
+                      ? "拖到上面归档 · 双击打开"
+                      : "课程资料，打不开，可在访达里查看"
+                }
               >
-                <span className="inbox-format">{item.format}</span>
+                <span className="file-ext">{item.format}</span>
                 <span className="inbox-name">{item.name}</span>
               </div>
             ))}
@@ -426,6 +435,15 @@ export function Explorer() {
       )}
     </div>
   );
+}
+
+/** Folder ids down to `levels` deep, counting the outermost as level one. */
+function idsToDepth(folders: BoardFolder[], levels: number): string[] {
+  if (levels <= 0) return [];
+  return folders.flatMap((folder) => [
+    folder.id,
+    ...idsToDepth(folder.children, levels - 1),
+  ]);
 }
 
 function buildRows(folders: BoardFolder[], expanded: Set<string>, depth = 0): Row[] {
@@ -591,7 +609,7 @@ function FileRow({
     <div
       className={`tree-row tree-file${selected ? " selected" : ""}${
         item.missing ? " missing" : ""
-      }`}
+      }${item.readable ? "" : " unreadable"}`}
       style={{ paddingLeft: 22 + depth * 14 }}
       draggable={!item.missing}
       onClick={(e) => {
@@ -605,10 +623,20 @@ function FileRow({
         e.stopPropagation();
         onMenu(e.clientX, e.clientY);
       }}
-      title={item.missing ? "文件已不在原位置" : "双击打开"}
+      title={
+        item.missing
+          ? "文件已不在原位置"
+          : item.readable
+            ? "双击打开"
+            : "课程资料，打不开，可在访达里查看"
+      }
     >
       <span className="tree-icon"><FileIcon /></span>
       <span className="tree-name">{item.name}</span>
+      {/* Names on the board are shown without their extension, so this is the
+          only place the format appears -- and on a file the reader cannot open
+          it is also the answer to "why not". */}
+      <span className="file-ext">{item.format}</span>
     </div>
   );
 }

@@ -60,10 +60,20 @@ class LibraryError(Exception):
 
 @dataclass
 class Item:
+    """A file on the board.
+
+    Not necessarily a deck. A course folder collects whatever the course hands
+    out -- a syllabus, a dataset, a zip of starter code -- and hiding those
+    would make the board disagree with the folder it is supposed to be. They
+    are listed, marked as not openable, and left alone.
+    """
+
     path: str  # relative to the root, POSIX separators
     name: str
     format: str
     missing: bool = False
+    # Whether the reader can open it. False for course material we only file.
+    readable: bool = True
 
     @property
     def id(self) -> str:
@@ -151,8 +161,6 @@ class Library:
         for child in sorted(directory.iterdir(), key=lambda p: p.name.casefold()):
             if child.is_dir() or child.name.startswith("."):
                 continue
-            if child.suffix.lower() not in SUPPORTED:
-                continue
             items.append(
                 Item(
                     path=self.relative(child),
@@ -160,6 +168,7 @@ class Library:
                     format=child.suffix.lower().lstrip("."),
                     # A symlinked deck whose original has gone.
                     missing=not child.exists(),
+                    readable=child.suffix.lower() in SUPPORTED,
                 )
             )
         return items
@@ -213,9 +222,11 @@ class Library:
                 h.update(f"d[{name}\n".encode())
                 self._sign(child, h, depth + 1)
                 h.update(b"]\n")
-            elif not name.startswith(".") and child.suffix.lower() in SUPPORTED:
-                # A broken symlink shows as missing on the board, so mending it
-                # has to count as a change.
+            elif not name.startswith("."):
+                # Every file the board lists, not only the readable ones: a
+                # syllabus dropped into a course folder is a change to the
+                # board. A broken symlink shows as missing, so mending it
+                # counts too.
                 h.update(f"f:{name}:{int(child.exists())}\n".encode())
 
     def chain(self, rel: str | None) -> list[str]:
@@ -285,7 +296,7 @@ class Library:
             self.relative(deck)
             for deck in sorted(source.rglob("*"))
             if deck.is_file()
-            and deck.suffix.lower() in SUPPORTED
+            and not deck.name.startswith(".")
             and META not in deck.parts
         ]
         self.move(rescued, None)
@@ -310,9 +321,6 @@ class Library:
         source = Path(source).expanduser()
         if not source.exists():
             raise LibraryError(f"{source.name} 不存在。")
-        if source.suffix.lower() not in SUPPORTED:
-            raise LibraryError(f"{source.name} 不是支持的格式。")
-
         target_dir = self.resolve(INBOX if dest is None else dest)
         target_dir.mkdir(parents=True, exist_ok=True)
         target = _unique(target_dir / source.name)
@@ -331,6 +339,7 @@ class Library:
             path=self.relative(target),
             name=target.stem,
             format=target.suffix.lower().lstrip("."),
+            readable=target.suffix.lower() in SUPPORTED,
         )
 
     def import_bytes(self, name: str, data: bytes, dest: str | None = None) -> Item:
@@ -340,8 +349,6 @@ class Library:
         or link -- the browser handed over the bytes and nothing else.
         """
         safe = _clean_name(Path(name).stem) + Path(name).suffix.lower()
-        if Path(safe).suffix not in SUPPORTED:
-            raise LibraryError(f"{name} 不是支持的格式。")
 
         target_dir = self.resolve(INBOX if dest is None else dest)
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -351,6 +358,7 @@ class Library:
             path=self.relative(target),
             name=target.stem,
             format=target.suffix.lower().lstrip("."),
+            readable=target.suffix.lower() in SUPPORTED,
         )
 
     # -- per-folder state --------------------------------------------------

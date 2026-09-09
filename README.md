@@ -15,7 +15,7 @@
 
 ---
 
-支持 `.pptx` 和 `.pdf`。每句英文下面跟着它的中文，原文和译文一一对应。
+支持 `.pptx`、`.ppt`、`.pdf`、`.docx`、`.md`。每句英文下面跟着它的中文，原文和译文一一对应。
 
 ![ClassHelper](docs/screenshot-light.png)
 
@@ -27,6 +27,7 @@
 - **三种复制**：右键选中的句子，可以只复制原文、只复制译文，或两者对照。
 - **术语表**：锁定一个词的译法，所有用到它的句子会重新翻译。分全局 / 学期 / 课程三级。
 - **课板**：按学期和课程整理课件，就是真实的文件夹。在访达里改动，程序两秒内同步。
+- **其他资料照常显示**：课程文件夹里的大纲、数据集、代码压缩包也会列在课板上，标着格式、可以归档，只是打不开时会直说。
 - **费用**：状态栏显示累计花费（人民币），单价从服务商价目页自动获取。
 - **缓存**：翻译过的内容存在课件同级目录，重新打开是即时的，也不再花钱。
 
@@ -40,12 +41,14 @@
 到 [Releases](https://github.com/ahpasserby/ClassHelper/releases/latest) 下载
 `ClassHelper-*-mac-arm64.dmg`，打开后把应用拖进「应用程序」。
 
-目前只有 macOS（Apple Silicon）版本。应用没有 Apple 签名，第一次打开会被系统拦下：
-**在「应用程序」里右键点图标，选「打开」，弹窗里再点一次「打开」**。或者用命令行：
+目前只有 macOS（Apple Silicon）版本。应用做了 ad-hoc 签名但没有 Apple 公证，第一次
+打开系统会拦一下。**最省事的办法**是在终端执行一次：
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/ClassHelper.app
 ```
+
+也可以先双击打开、被拦下后去「系统设置 → 隐私与安全性」，在底部点「仍要打开」。
 
 ## 配置
 
@@ -59,13 +62,13 @@ xattr -dr com.apple.quarantine /Applications/ClassHelper.app
 | 目标语言 | 默认 `zh-CN`，可改成 `en`、`ja` 等 |
 | 用户信息位置 | 课件、术语表、缓存都在这个目录下，可整体备份 |
 
-`.pptx` 想显示真正的原图，装一下 LibreOffice，程序会自动用它：
+`.ppt` 需要 LibreOffice 才能读；`.pptx` 和 `.docx` 装了它才能显示真正的原版排版：
 
 ```bash
 brew install --cask libreoffice
 ```
 
-没装也能用，这时显示的是按原版式还原的近似图，面板里会写明。
+`.pptx` 没装也能用，这时显示的是按原版式还原的近似图，面板里会写明。`.md` 没有版面，只显示正文。
 
 ## 隐私
 
@@ -107,7 +110,7 @@ cd web && npm test      # 前端
 | 路径 | 内容 |
 | --- | --- |
 | `model.py` | 文档模型，与格式无关 |
-| `parsers/` | `.pptx` 和 `.pdf` 解析 |
+| `parsers/` | 各格式解析：pptx、pdf、docx、md，以及需要转换的 ppt |
 | `classify.py` | 判断每个文本块是标题、正文、图注还是页面装饰 |
 | `segment.py` | 切成翻译单元 |
 | `translate.py` | 逐页翻译，对齐校验 |

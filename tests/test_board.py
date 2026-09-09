@@ -156,9 +156,13 @@ def test_the_scope_chain_runs_from_the_root_down(library):
     assert library.chain(None) == [""]
 
 
-def test_only_supported_formats_are_listed(library, tmp_path):
+def test_a_file_of_any_kind_is_listed_in_the_inbox(library, tmp_path):
+    """Everything filed shows up; whether the reader can open it is a separate
+    fact carried on the item."""
     (library.root / INBOX / "notes.txt").write_text("hello")
-    assert library.inbox() == []
+    inbox = library.inbox()
+    assert [i.name for i in inbox] == ["notes"]
+    assert not inbox[0].readable
 
 
 # -- terminology, stored in the folder it describes -------------------------
@@ -396,9 +400,9 @@ def test_editing_a_deck_does_not_change_the_signature(library, deck):
 
 
 def test_a_file_the_board_would_not_show_does_not_change_the_signature(library):
+    """Dotfiles only. Everything the board lists is in the signature."""
     library.create_folder(None, "2026秋")
     before = library.signature()
-    (library.resolve("2026秋") / "笔记.txt").write_text("x", encoding="utf-8")
     (library.resolve("2026秋") / ".DS_Store").write_bytes(b"x")
     assert library.signature() == before
 
@@ -421,3 +425,63 @@ def test_the_version_endpoint_matches_the_board(client, tmp_path):
 
     lib.create_folder(None, "新学期")
     assert client.get("/api/board/version").json()["version"] != board["version"]
+
+
+# -- course material that is not a deck -------------------------------------
+
+def test_the_board_lists_files_it_cannot_open(library):
+    """A course folder collects whatever the course hands out. Hiding the
+    syllabus would make the board disagree with the folder it stands for."""
+    folder = library.resolve(library.create_folder(None, "DSA"))
+    (folder / "Lec01.pdf").write_bytes(b"%PDF-1.4\n")
+    (folder / "syllabus.txt").write_text("weeks", encoding="utf-8")
+    (folder / "starter.zip").write_bytes(b"PK\x03\x04")
+
+    items = {i.name: i for i in library.tree()[0].items}
+    assert set(items) == {"Lec01", "syllabus", "starter"}
+    assert items["Lec01"].readable
+    assert not items["syllabus"].readable
+    assert not items["starter"].readable
+
+
+def test_adding_material_that_is_not_a_deck_changes_the_signature(library):
+    """Otherwise dropping a handout into a course folder would not show up
+    until something else did."""
+    folder = library.resolve(library.create_folder(None, "DSA"))
+    before = library.signature()
+    (folder / "syllabus.txt").write_text("weeks", encoding="utf-8")
+    assert library.signature() != before
+
+
+def test_hidden_files_are_still_not_listed(library):
+    folder = library.resolve(library.create_folder(None, "DSA"))
+    (folder / ".DS_Store").write_bytes(b"x")
+    assert library.tree()[0].items == []
+
+
+def test_material_can_be_filed_like_anything_else(library, tmp_path):
+    """It is on the board to be organised, so importing and moving it has to
+    work -- refusing would leave it stuck wherever it landed."""
+    source = tmp_path / "downloads" / "syllabus.txt"
+    source.parent.mkdir(exist_ok=True)
+    source.write_text("weeks", encoding="utf-8")
+
+    item = library.import_path(source, ImportMode.COPY)
+    assert not item.readable
+    assert item.path.startswith(INBOX)
+
+    course = library.create_folder(None, "DSA")
+    moved = library.move([item.path], course)
+    assert moved[0].startswith("DSA/")
+
+
+def test_deleting_a_folder_rescues_material_too(library):
+    """Its contents go back to the inbox. Leaving the handouts to be trashed
+    with the folder would delete files the user never chose to delete."""
+    course = library.create_folder(None, "DSA")
+    folder = library.resolve(course)
+    (folder / "Lec01.pdf").write_bytes(b"%PDF-1.4\n")
+    (folder / "syllabus.txt").write_text("weeks", encoding="utf-8")
+
+    assert library.delete_folder(course) == 2
+    assert {i.name for i in library.inbox()} == {"Lec01", "syllabus"}

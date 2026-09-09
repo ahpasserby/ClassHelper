@@ -92,6 +92,10 @@ async function waitUntilReady(origin: string, timeoutMs = 40_000): Promise<void>
  * knob the Python side already honours.
  */
 function configHome(): string | undefined {
+  // An explicit CLASSHELPER_HOME wins. Otherwise a packaged build has exactly
+  // one place its settings can be, which is the whole point of the default --
+  // but it also means a second library, or a test run, has nowhere to go.
+  if (process.env.CLASSHELPER_HOME) return process.env.CLASSHELPER_HOME;
   return app.isPackaged ? app.getPath("userData") : undefined;
 }
 

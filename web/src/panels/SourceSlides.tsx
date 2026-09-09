@@ -72,6 +72,16 @@ function SourceFor({ deckId }: { deckId: string }) {
   const { deck } = state;
   const exact = status?.mode === "exact";
 
+  // Markdown has no page to be a picture of, and a Word document records no
+  // positions to draw one from. Saying so beats an empty frame.
+  if (status?.mode === "none") {
+    return (
+      <div className="source-pane">
+        <div className="source-note">{status.detail || "这个格式没有版面。"}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="source-pane" ref={scroller}>
       {status && status.mode !== "exact" && status.detail && (
