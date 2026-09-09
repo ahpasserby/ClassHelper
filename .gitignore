@@ -1,0 +1,32 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Build output. `src/classhelper/web` is the *built* reader and is committed
+# on purpose, so that installing the package is enough to run it.
+dist/
+desktop/out/
+desktop/dist/
+desktop/resources/
+# PyInstaller's work directory at the repo root -- not desktop/build, which
+# holds the entitlements the macOS build needs.
+/build/
+# A convenience symlink to the packaged app.
+/classhelper.app
+
+# Never commit secrets or course material.
+config.toml
+config.toml.bak
+*.pptx
+*.pdf
+
+# Source maps are never committed; see web/vite.config.ts.
+*.map
+
+.DS_Store

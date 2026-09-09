@@ -1,0 +1,975 @@
+/*
+ * A reading surface first.
+ *
+ * The chrome borrows VS Code's palette so it sits alongside Dockview's own
+ * theme without a seam, but the reading column deliberately does not: it uses a
+ * generous measure, real line height, and a serif-friendly size, because the
+ * job there is sustained reading rather than scanning code.
+ */
+
+:root {
+  --bg: #1e1e1e;
+  --bg-raised: #252526;
+  --bg-input: #3c3c3c;
+  --fg: #d4d4d4;
+  --fg-muted: #8b8b8b;
+  --fg-source: #e8e8e8;
+  --fg-target: #9cc7a2;
+  --border: #333;
+  --accent: #0a84ff;
+  --accent-soft: rgba(10, 132, 255, 0.14);
+  --warn: #d7a04a;
+  --error: #f14c4c;
+  --code-bg: #1a1a1a;
+  --reading-measure: 46rem;
+}
+
+:root[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-raised: #f3f3f3;
+  --bg-input: #ffffff;
+  --fg: #24292f;
+  --fg-muted: #6b7280;
+  --fg-source: #111418;
+  --fg-target: #1f6f43;
+  --border: #d8dbe0;
+  --accent: #0a66c2;
+  --accent-soft: rgba(10, 102, 194, 0.1);
+  --warn: #9a6700;
+  --error: #cf222e;
+  --code-bg: #f6f8fa;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+/* The sidebar sits beside the workspace grid, not inside it: a docked group
+   shares the window proportionally, so the file tree grew to half the screen
+   whenever a panel on the right was closed. */
+.workspace { display: flex; flex: 1; min-height: 0; }
+.workspace > .dockview-theme-dark,
+.workspace > .dockview-theme-light { flex: 1; min-width: 0; }
+
+/* Dockview's content wrapper is auto-height, so a panel taller than its pane
+   is clipped by the group's overflow:hidden instead of scrolling. Giving the
+   wrapper the pane's height makes `height: 100%` meaningful inside a panel,
+   and each panel root then decides how it overflows. Without this a page just
+   ends partway down with no way to reach the rest. */
+.dv-react-part { height: 100%; }
+.spacer { flex: 1; }
+.muted { color: var(--fg-muted); }
+.pad { padding: 12px; }
+
+button.link {
+  background: none; border: none; color: var(--accent);
+  cursor: pointer; font-size: inherit; padding: 0 4px;
+}
+button.link:hover { text-decoration: underline; }
+
+/* -- top and status bars -------------------------------------------------- */
+
+.topbar, .statusbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 12px; background: var(--bg-raised);
+  border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.topbar { height: 36px; }
+
+/* Room for the traffic lights, and the bar doubles as the window's drag
+   handle -- with the controls themselves excluded, or they could not be
+   clicked. */
+:root[data-titlebar="inset"] .topbar {
+  padding-left: 84px;
+  height: 40px;
+  -webkit-app-region: drag;
+}
+:root[data-titlebar="inset"] .topbar button,
+:root[data-titlebar="inset"] .topbar label,
+:root[data-titlebar="inset"] .topbar .menu {
+  -webkit-app-region: no-drag;
+}
+.statusbar {
+  height: 24px; font-size: 12px; color: var(--fg-muted);
+  border-bottom: none; border-top: 1px solid var(--border);
+}
+.brand { font-weight: 600; letter-spacing: 0.2px; }
+.deck-name { color: var(--fg-muted); }
+.toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.status-error { color: var(--error); }
+
+/* -- chapter list --------------------------------------------------------- */
+
+.chapters { height: 100%; overflow-y: auto; padding: 4px 0; }
+.chapter {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 6px 10px; background: none; border: none; color: var(--fg);
+  cursor: pointer; text-align: left; font-size: 12px;
+  border-left: 2px solid transparent;
+}
+.chapter:hover { background: var(--accent-soft); }
+.chapter.current { background: var(--accent-soft); border-left-color: var(--accent); }
+.chapter .n { color: var(--fg-muted); min-width: 22px; font-variant-numeric: tabular-nums; }
+.chapter .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chapter .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+.chapter .dot.pending { background: var(--accent); }
+.chapter .dot.flagged { background: var(--warn); }
+
+/* -- reader --------------------------------------------------------------- */
+
+/* `position: relative` so a page's offsetTop is measured against the
+   scroller -- which is what the two-pane sync reads. */
+.reader { height: 100%; overflow-y: auto; padding: 24px 32px 60vh; position: relative; }
+.reader > * { max-width: var(--reading-measure); margin-inline: auto; }
+
+.notice {
+  border-left: 3px solid var(--warn); background: var(--bg-raised);
+  padding: 8px 12px; margin-bottom: 20px; font-size: 12px; color: var(--fg-muted);
+}
+
+/* A page section carries no padding, border or margin of its own -- every bit
+   of the spacing lives inside .page-inner, and the slide pane is built the same
+   way. That is what makes the agreed height mean the same thing on both sides:
+   the section is exactly as tall as the agreement says, whatever box-sizing is
+   in force, so page N starts level with page N beside it. */
+.page { padding: 0; margin: 0; border: none; }
+.page-inner { padding-bottom: 36px; border-bottom: 1px solid var(--border); }
+.page + .page .page-inner { padding-top: 36px; }
+.page-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+.page-number {
+  font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px;
+}
+.page-title { font-size: 12px; color: var(--fg-muted); }
+
+.block { margin-bottom: 4px; }
+
+/* List items keep their shape. The marker sits in its own column so wrapped
+   lines and the translation underneath both align to the text, not to the
+   bullet. */
+.block.bullet { display: flex; gap: 8px; align-items: baseline; }
+.block.bullet .block-body { flex: 1; min-width: 0; }
+.bullet-marker {
+  flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--fg-muted); margin-top: 9px; align-self: flex-start;
+}
+.block.bullet .sentence { margin-left: 0; }
+
+.sentence {
+  padding: 5px 10px; margin: 2px -10px; border-radius: 4px;
+  cursor: pointer; border-left: 2px solid transparent;
+}
+.sentence:hover { background: var(--bg-raised); }
+.sentence.selected { background: var(--accent-soft); border-left-color: var(--accent); }
+
+.source {
+  color: var(--fg-source); font-size: 15px; line-height: 1.6;
+}
+.source.heading { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+
+.target {
+  color: var(--fg-target); font-size: 14px; line-height: 1.7; margin-top: 2px;
+}
+/* Flagged and edited are marked, not hidden: the reader should be able to see
+   which lines the system is unsure about and which ones they fixed. */
+.target.flagged { border-left: 2px solid var(--warn); padding-left: 8px; margin-left: -10px; }
+.target.edited { border-left: 2px solid var(--accent); padding-left: 8px; margin-left: -10px; }
+.target.pending { color: var(--fg-muted); font-style: italic; }
+
+textarea.target.editing {
+  width: 100%; background: var(--bg-input); color: var(--fg);
+  border: 1px solid var(--accent); border-radius: 3px;
+  padding: 4px 6px; font: inherit; resize: vertical; min-height: 3em;
+}
+
+.sentence-actions {
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+  font-size: 12px; color: var(--fg-muted);
+}
+.sentence-actions button {
+  background: var(--bg-input); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 3px; padding: 3px 9px; cursor: pointer; font-size: 12px;
+}
+.sentence-actions button:hover { border-color: var(--accent); }
+.sentence-actions .hint { font-size: 11px; }
+
+pre.code {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px 12px; overflow-x: auto; font-size: 13px; line-height: 1.5;
+  font-family: "SF Mono", Menlo, Consolas, monospace; color: var(--fg-source);
+  margin: 10px 0;
+}
+
+.figures { margin-top: 18px; padding: 12px; background: var(--bg-raised); border-radius: 5px; }
+.figures-label { font-size: 11px; color: var(--fg-muted); margin-bottom: 8px; }
+.figure-images { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+/* Height comes from the aspect ratio the reader sets per image, so the space
+   is reserved before the file loads; width follows it. */
+.figure-images img {
+  max-width: 100%; max-height: 320px; height: 320px; width: auto;
+  object-fit: contain; border-radius: 3px; background: var(--bg-raised);
+}
+.figure-terms { display: flex; flex-wrap: wrap; gap: 6px; }
+.figure-term {
+  display: flex; gap: 6px; align-items: baseline; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 12px; padding: 2px 10px; font-size: 12px;
+}
+.figure-term:hover { border-color: var(--accent); }
+.figure-term .source { font-size: 12px; }
+.figure-term .target { font-size: 12px; margin: 0; }
+
+.hidden-blocks { margin-top: 14px; font-size: 12px; }
+.hidden-block {
+  display: flex; justify-content: space-between; gap: 12px;
+  color: var(--fg-muted); padding: 3px 0; border-bottom: 1px dashed var(--border);
+}
+.hidden-block .reason { font-size: 11px; opacity: 0.7; }
+
+.reader-end { text-align: center; color: var(--fg-muted); font-size: 12px; padding: 20px 0; }
+
+/* -- empty state ---------------------------------------------------------- */
+
+.empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 10px; padding: 40px; text-align: center;
+}
+.empty h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.empty p { color: var(--fg-muted); margin: 0; }
+.empty form { display: flex; gap: 8px; margin-top: 10px; width: min(560px, 90%); }
+.empty input {
+  flex: 1; background: var(--bg-input); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 7px 10px; font: inherit;
+}
+.empty button.primary {
+  background: var(--accent); color: #fff; border: none; border-radius: 4px;
+  padding: 9px 22px; cursor: pointer; font: inherit; font-size: 14px;
+}
+.empty button {
+  background: var(--accent); color: #fff; border: none; border-radius: 4px;
+  padding: 7px 16px; cursor: pointer; font: inherit;
+}
+.error { color: var(--error); max-width: 560px; white-space: pre-wrap; text-align: left; }
+
+/* -- ask panel ------------------------------------------------------------ */
+
+.ask { display: flex; flex-direction: column; height: 100%; }
+
+.selection-bar {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  border-bottom: 1px solid var(--border); font-size: 12px; flex: 0 0 auto;
+}
+.selection-bar .tag {
+  border: 1px solid var(--border); border-radius: 3px;
+  padding: 1px 6px; color: var(--fg-muted); flex: 0 0 auto;
+}
+.selection-bar .quote {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--fg-source);
+}
+
+.thread { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.thread-viewport { flex: 1; overflow-y: auto; padding: 14px; }
+.thread-empty { color: var(--fg-muted); font-size: 12px; line-height: 1.7; }
+.thread-empty p { margin: 0 0 8px; }
+
+.msg { margin-bottom: 14px; white-space: pre-wrap; line-height: 1.75; font-size: 13px; }
+.msg.user {
+  background: var(--accent-soft); border-radius: 6px; padding: 8px 11px;
+  color: var(--fg-source);
+}
+.msg.assistant { color: var(--fg); }
+.msg.assistant { white-space: normal; }
+.msg.assistant strong { color: var(--fg-source); font-weight: 600; }
+.msg.assistant p { margin: 0 0 10px; }
+.msg.assistant p:last-child { margin-bottom: 0; }
+.msg.assistant ul, .msg.assistant ol { margin: 0 0 10px; padding-left: 20px; }
+.msg.assistant li { margin-bottom: 4px; }
+.msg.assistant code {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 3px;
+  padding: 1px 5px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+}
+.msg.assistant pre {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 4px;
+  padding: 10px; overflow-x: auto;
+}
+.msg.assistant pre code { border: none; padding: 0; background: none; }
+.msg.assistant h1, .msg.assistant h2, .msg.assistant h3 {
+  font-size: 14px; margin: 12px 0 6px; color: var(--fg-source);
+}
+
+.thinking {
+  display: inline-block; color: var(--fg-muted); font-size: 12px;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+
+.composer {
+  display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.composer-input {
+  flex: 1; background: var(--bg-input); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 4px; padding: 7px 9px;
+  font: inherit; resize: none; max-height: 160px;
+}
+.composer-input:focus { outline: none; border-color: var(--accent); }
+.composer-send {
+  background: var(--accent); color: #fff; border: none; border-radius: 4px;
+  padding: 0 14px; cursor: pointer; font: inherit; flex: 0 0 auto;
+}
+.composer-send.cancel { background: var(--bg-input); color: var(--fg); }
+
+/* -- glossary ------------------------------------------------------------- */
+
+.glossary { display: flex; flex-direction: column; height: 100%; }
+.glossary-form {
+  display: flex; flex-direction: column; gap: 6px; padding: 10px;
+  border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.glossary-form input {
+  background: var(--bg-input); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 4px; padding: 6px 9px; font: inherit;
+}
+.glossary-form button {
+  background: var(--accent); color: #fff; border: none; border-radius: 4px;
+  padding: 7px; cursor: pointer; font: inherit;
+}
+.glossary-form button:disabled { opacity: 0.6; cursor: default; }
+.glossary-message { font-size: 12px; color: var(--fg-muted); }
+
+.glossary-list { flex: 1; overflow-y: auto; }
+.term {
+  display: flex; align-items: baseline; gap: 8px; padding: 6px 10px;
+  border-bottom: 1px solid var(--border); font-size: 12px;
+}
+.term .src { flex: 1; color: var(--fg-source); }
+.term .dst { flex: 1; color: var(--fg-target); }
+.term.locked .dst { font-weight: 600; }
+
+/* -- view menu ------------------------------------------------------------ */
+
+.menu-anchor { position: relative; }
+.menu {
+  position: absolute; top: 100%; left: 0; z-index: 40; min-width: 170px;
+  background: var(--bg-raised); border: 1px solid var(--border);
+  border-radius: 5px; padding: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.menu button {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  color: var(--fg); padding: 6px 10px; border-radius: 3px; cursor: pointer;
+  font: inherit;
+}
+.menu button:hover { background: var(--accent-soft); }
+.menu-rule { height: 1px; background: var(--border); margin: 4px 0; }
+
+/* -- empty workspace ------------------------------------------------------ */
+
+/* Close every panel and you get an empty window, the way an editor does.
+   Nothing is drawn here on purpose. */
+.watermark-empty { height: 100%; background: var(--bg); }
+
+/* -- drag and drop -------------------------------------------------------- */
+
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center; pointer-events: none;
+  background: rgba(10, 132, 255, 0.1);
+  border: 3px dashed var(--accent);
+}
+.drop-overlay > div {
+  background: var(--bg-raised); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 16px 28px; font-size: 15px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.statusbar .status-error { color: var(--error); }
+
+/* -- board ---------------------------------------------------------------- */
+
+.board { display: flex; height: 100%; overflow: hidden; }
+
+.board-tree {
+  flex: 0 0 236px; overflow-y: auto; border-right: 1px solid var(--border);
+  background: var(--bg-raised); padding-bottom: 20px;
+}
+.board-tree-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; font-size: 11px; color: var(--fg-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  position: sticky; top: 0; background: var(--bg-raised); z-index: 2;
+  border-bottom: 1px solid var(--border);
+}
+
+.tree-row {
+  display: flex; align-items: center; gap: 4px; width: 100%;
+  padding: 4px 8px; background: none; border: none; color: var(--fg);
+  cursor: pointer; text-align: left; font-size: 13px;
+  border-left: 2px solid transparent; user-select: none;
+}
+.tree-row:hover { background: var(--accent-soft); }
+.tree-row.current { background: var(--accent-soft); border-left-color: var(--accent); }
+/* Highlighted while a deck is dragged over it, so the destination is never in
+   doubt at the moment of dropping. */
+.tree-row.drop-target {
+  background: var(--accent); color: #fff; border-radius: 3px;
+}
+.tree-chevron {
+  width: 14px; background: none; border: none; color: var(--fg-muted);
+  cursor: pointer; padding: 0; font-size: 11px; line-height: 1; flex: 0 0 auto;
+}
+.tree-icon { flex: 0 0 auto; font-size: 12px; }
+.tree-indent { width: 14px; flex: 0 0 auto; }
+.tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-count {
+  font-size: 11px; color: var(--fg-muted); background: var(--bg);
+  border-radius: 8px; padding: 0 6px; flex: 0 0 auto;
+}
+.tree-empty { padding: 12px 10px; font-size: 12px; color: var(--fg-muted); line-height: 1.6; }
+
+/* A column so the glossary can sit at the bottom of the pane rather than
+   floating under the last folder: it belongs to the page as a whole, not to
+   whatever section happens to be last. */
+.board-main {
+  height: 100%; overflow-y: auto; padding: 0 28px 24px; min-width: 0;
+  display: flex; flex-direction: column;
+}
+.board-main > * { flex: 0 0 auto; }
+.board-main > .glossary-section { margin-top: auto; }
+
+.crumbs {
+  display: flex; align-items: center; gap: 4px; padding: 14px 0 10px;
+  position: sticky; top: 0; background: var(--bg); z-index: 3;
+  border-bottom: 1px solid var(--border); margin-bottom: 20px; font-size: 13px;
+}
+.crumb-sep { color: var(--fg-muted); margin: 0 2px; }
+
+.board-error {
+  border-left: 3px solid var(--error); background: var(--bg-raised);
+  padding: 8px 12px; margin-bottom: 16px; color: var(--error); font-size: 13px;
+}
+
+.board-section { margin-bottom: 30px; }
+.board-section.level-1 { margin: 14px 0 18px 18px; }
+.board-section.level-1 h3 {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px;
+  font-size: 15px; font-weight: 600; padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+}
+.board-section.level-1 h3 .count {
+  font-size: 12px; font-weight: 400; color: var(--fg-muted);
+}
+.board-section.drop-target {
+  outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 4px;
+}
+.board-section h2 {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px;
+  font-size: 19px; font-weight: 600; letter-spacing: -0.01em;
+  padding-bottom: 7px; border-bottom: 1px solid var(--border);
+}
+.board-section h2 .count {
+  font-size: 12px; font-weight: 400; color: var(--fg-muted);
+}
+.board-section h2 .section-hint {
+  font-size: 12px; font-weight: 400; color: var(--fg-muted); margin-left: auto;
+}
+.section-title {
+  background: none; border: none; color: inherit; font: inherit; padding: 0;
+  cursor: pointer; text-align: left;
+}
+.section-title:hover { color: var(--accent); }
+.section-empty, .section-sub { font-size: 12px; padding: 8px 2px; margin: 0; }
+
+/* The inbox is where every import lands, so it is marked rather than blended
+   in -- an unfiled deck should look like an open loop. */
+.board-section.inbox h2 { border-bottom-color: var(--warn); }
+.board-section.inbox { border-left: 3px solid var(--warn); padding-left: 14px; }
+
+.item-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.item-table tr { border-bottom: 1px solid var(--border); cursor: grab; }
+.item-table tr:hover { background: var(--bg-raised); }
+.item-table tr.missing { opacity: 0.55; cursor: default; }
+.item-table td { padding: 7px 8px; vertical-align: middle; }
+.item-format {
+  width: 46px; color: var(--fg-muted); font-size: 11px; text-transform: uppercase;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+}
+.item-name { color: var(--fg-source); }
+.item-actions { width: 130px; text-align: right; white-space: nowrap; }
+.item-meta { width: 34%; text-align: right; font-size: 12px; white-space: nowrap; }
+
+/* A directory listing: folders first, then the decks in this folder. One
+   level only -- navigating in is a click. */
+.item-table.listing tr { cursor: default; }
+.item-table.listing .folder-row { cursor: pointer; }
+.item-table.listing .folder-row .item-name { font-weight: 600; }
+.item-table.listing .folder-row.drop-target {
+  outline: 2px dashed var(--accent); outline-offset: -2px;
+}
+button.link.danger { color: var(--error); }
+
+.badge {
+  font-size: 11px; border: 1px solid var(--border); border-radius: 9px;
+  padding: 1px 7px; color: var(--fg-muted); margin-left: 8px; white-space: nowrap;
+}
+.badge.locked { border-color: var(--accent); color: var(--accent); }
+.badge.inherited { border-style: dashed; }
+
+.board-empty { padding: 30px 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* -- scoped glossary ------------------------------------------------------ */
+
+.glossary-section {
+  border-top: 1px solid var(--border); padding-top: 16px; margin-bottom: 0;
+}
+/* Collapsed, the heading is the whole section, so it should not carry the
+   spacing of one that is open. */
+.glossary-section h2 { border-bottom: none; padding-bottom: 0; }
+.scope-chain { font-size: 12px; margin: 0 0 10px; }
+.scope-self { color: var(--accent); font-weight: 600; }
+
+.glossary-form.inline {
+  flex-direction: row; padding: 0; border: none; margin-bottom: 10px; gap: 8px;
+}
+.glossary-form.inline input { flex: 1; }
+.glossary-form.inline button { flex: 0 0 auto; padding: 6px 14px; }
+
+.glossary-table .term-src { color: var(--fg-source); width: 34%; }
+.glossary-table .term-dst { color: var(--fg-target); width: 30%; }
+.glossary-table .term-dst.locked { font-weight: 600; }
+.glossary-table .term-scope { width: 22%; }
+.glossary-table tr { cursor: default; }
+
+/* -- ask, one thread per deck --------------------------------------------- */
+
+/* Threads are hidden rather than unmounted: assistant-ui keeps a conversation
+   inside its runtime hook, so unmounting would discard it. */
+.ask-host { height: 100%; }
+.ask-slot { height: 100%; }
+.ask-slot[hidden] { display: none; }
+
+.link.strong { font-weight: 600; }
+
+/* -- fixed sidebar -------------------------------------------------------- */
+
+.sidebar {
+  flex: 0 0 auto; display: flex; flex-direction: column; min-width: 0;
+  background: var(--bg);
+}
+.sidebar.left { border-right: 1px solid var(--border); }
+.sidebar.right { border-left: 1px solid var(--border); }
+.sidebar-tabs {
+  display: flex; align-items: stretch; flex: 0 0 auto; height: 35px;
+  background: var(--bg-raised); border-bottom: 1px solid var(--border);
+}
+.sidebar-tabs button {
+  background: none; border: none; color: var(--fg-muted); cursor: pointer;
+  font: inherit; font-size: 12px; padding: 0 12px; white-space: nowrap;
+  border-bottom: 1px solid transparent;
+}
+.sidebar-tabs button.on {
+  color: var(--fg); background: var(--bg); border-bottom-color: var(--bg);
+}
+.sidebar-tabs button:hover { color: var(--fg); }
+.sidebar-close { font-size: 11px !important; padding: 0 10px !important; }
+.sidebar-body { flex: 1; min-height: 0; overflow: hidden; }
+.sidebar-body > * { height: 100%; }
+
+/* A 4px grab strip, widened by a transparent overlay so it is easy to hit. */
+.sidebar-resizer {
+  flex: 0 0 4px; cursor: col-resize; background: transparent;
+  z-index: 5; position: relative;
+}
+.sidebar-resizer.left { margin-left: -2px; }
+.sidebar-resizer.right { margin-right: -2px; }
+.sidebar-resizer:hover, .sidebar-resizer.dragging { background: var(--accent); }
+
+/* -- explorer sidebar ----------------------------------------------------- */
+
+.explorer { display: flex; flex-direction: column; height: 100%; }
+
+.explorer-tree { flex: 1 1 auto; overflow-y: auto; min-height: 60px; }
+.explorer-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px; font-size: 11px; color: var(--fg-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  position: sticky; top: 0; background: var(--bg); z-index: 2;
+  border-bottom: 1px solid var(--border);
+}
+
+/* The inbox is pinned to the bottom of the same panel as the tree, so a deck
+   can be dragged from one to the other without either end going off screen. */
+.explorer-inbox {
+  flex: 0 0 auto; max-height: 45%; display: flex; flex-direction: column;
+  border-top: 1px solid var(--border); background: var(--bg-raised);
+}
+.explorer-inbox .explorer-head { background: var(--bg-raised); }
+.explorer-inbox.dropping {
+  outline: 2px dashed var(--accent); outline-offset: -3px;
+}
+.inbox-list { overflow-y: auto; padding-bottom: 6px; }
+.inbox-row {
+  display: flex; align-items: center; gap: 7px; padding: 5px 10px;
+  font-size: 12px; cursor: grab; border-left: 2px solid var(--warn);
+}
+.inbox-row:hover { background: var(--accent-soft); }
+.inbox-row.missing { opacity: 0.5; cursor: default; border-left-color: var(--error); }
+.inbox-format {
+  font-size: 10px; color: var(--fg-muted); text-transform: uppercase;
+  font-family: "SF Mono", Menlo, Consolas, monospace; flex: 0 0 auto;
+}
+.inbox-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row .link { opacity: 0; }
+.inbox-row:hover .link { opacity: 1; }
+
+.tree-row.tree-file { font-size: 12px; color: var(--fg-muted); }
+.tree-row.tree-file:hover { color: var(--fg); }
+.tree-row.tree-file.missing { opacity: 0.5; text-decoration: line-through; }
+
+/* -- settings ------------------------------------------------------------- */
+
+.settings { height: 100%; overflow-y: auto; padding: 28px 32px 60px; }
+.settings > * { max-width: 46rem; margin-inline: auto; }
+.settings h1 { font-size: 22px; font-weight: 600; margin: 0 0 24px; }
+.settings section { margin-bottom: 30px; }
+.settings h2 {
+  font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--fg-muted); font-weight: 600; margin: 0 0 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.settings code {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 3px;
+  padding: 1px 5px; font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+}
+.settings p { line-height: 1.7; margin: 6px 0 0; }
+.small { font-size: 12px; }
+
+.setting-row {
+  display: flex; align-items: flex-start; gap: 20px; padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-label { flex: 1; }
+.setting-hint { font-size: 12px; line-height: 1.6; margin-top: 3px; }
+.setting-control { flex: 0 0 auto; padding-top: 1px; }
+
+/* The highlight is one element moved by index, not a background swapped
+   between buttons: the motion is the state changing rather than an animation
+   played next to it. */
+.segmented {
+  position: relative; display: grid; grid-auto-flow: column;
+  grid-auto-columns: 1fr; border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden; background: var(--bg-input);
+  min-width: 150px;
+}
+.segmented-thumb {
+  position: absolute; top: 0; bottom: 0; left: 0;
+  width: calc(100% / var(--count));
+  transform: translateX(calc(var(--index) * 100%));
+  background: var(--accent); border-radius: 5px;
+  transition: transform 180ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .segmented-thumb { transition: none; }
+}
+.segmented button {
+  position: relative; z-index: 1; background: none; border: none;
+  color: var(--fg); padding: 6px 18px; cursor: pointer; font: inherit;
+  font-size: 12px; transition: color 180ms ease; white-space: nowrap;
+}
+.segmented button.on { color: #fff; }
+
+.field {
+  background: var(--bg-input); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 5px; padding: 6px 9px; font: inherit; font-size: 13px;
+  min-width: 150px;
+}
+.field.wide { min-width: 280px; }
+.field:focus { outline: none; border-color: var(--accent); }
+select.field { cursor: pointer; }
+
+.settings-actions {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 16px 0 6px;
+}
+.settings-actions button {
+  border-radius: 5px; padding: 7px 18px; cursor: pointer; font: inherit;
+  font-size: 13px; border: 1px solid var(--border);
+}
+.settings-actions button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+.settings-actions button.ghost { background: var(--bg-input); color: var(--fg); }
+.settings-actions button:disabled { opacity: 0.6; cursor: default; }
+.settings-ok { color: var(--fg-target); font-size: 12px; }
+.settings-bad { color: var(--error); font-size: 12px; }
+
+/* -- explorer, as a file manager ------------------------------------------ */
+
+.explorer-head .head-actions { display: flex; gap: 8px; }
+.icon-button {
+  background: none; border: none; color: var(--accent); cursor: pointer;
+  font: inherit; font-size: 11px; padding: 0; text-transform: none;
+  letter-spacing: 0;
+}
+.icon-button:hover { text-decoration: underline; }
+
+.tree-row.selected, .inbox-row.selected {
+  background: var(--accent); color: #fff;
+}
+.tree-row.selected .tree-count, .inbox-row.selected .inbox-format { color: #fff; }
+
+.tree-row.editing { padding-right: 8px; }
+.tree-input {
+  flex: 1; min-width: 0; background: var(--bg-input); color: var(--fg);
+  border: 1px solid var(--accent); border-radius: 3px; padding: 1px 5px;
+  font: inherit; font-size: 13px;
+}
+.tree-input:focus { outline: none; }
+
+.selection-count { color: var(--accent); padding-top: 4px; }
+
+/* A context menu is positioned against the viewport, not the panel, so it can
+   overflow the sidebar rather than being clipped inside it. */
+.menu.context { position: fixed; z-index: 200; min-width: 160px; }
+.menu button.danger { color: var(--error); }
+
+/* The reveal control sits inside the key field's row rather than beside the
+   label: it acts on the value, not on the setting. */
+.field-with-button { display: flex; align-items: stretch; gap: 6px; }
+.field-with-button .field { flex: 1; }
+.reveal {
+  background: var(--bg-input); border: 1px solid var(--border); border-radius: 5px;
+  padding: 0 10px; cursor: pointer; font-size: 13px; line-height: 1;
+}
+.reveal:hover { border-color: var(--accent); }
+
+.settings-warn {
+  border-left: 3px solid var(--warn); background: var(--bg-raised);
+  padding: 8px 12px; margin: 14px 0 0; font-size: 12px; line-height: 1.7;
+  color: var(--fg-muted);
+}
+
+/* -- conversations -------------------------------------------------------- */
+
+.chat-bar {
+  position: relative; display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; border-bottom: 1px solid var(--border); flex: 0 0 auto;
+}
+.chat-current {
+  flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
+  background: none; border: none; color: var(--fg); cursor: pointer;
+  font: inherit; font-size: 12px; padding: 2px 0; text-align: left;
+}
+.chat-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-caret { color: var(--fg-muted); font-size: 10px; flex: 0 0 auto; }
+
+.chat-menu {
+  position: absolute; top: 100%; left: 8px; right: 8px; z-index: 60;
+  max-height: 320px; overflow-y: auto; padding: 4px;
+}
+
+/*
+ * One row, three columns: name, count, delete.
+ *
+ * Scoped under .chat-menu because the generic `.menu button` rule is a
+ * class+element selector and outranks a bare class -- a plain
+ * `.chat-entry-name` lost its flex layout to it, and the row collapsed with
+ * the delete button landing on top of the title.
+ *
+ * The delete button keeps its column whether or not it is visible, so the row
+ * does not reflow on hover.
+ */
+.chat-menu .chat-entry {
+  display: flex; align-items: center; gap: 8px;
+  border-radius: 4px; padding: 0 4px 0 8px;
+}
+.chat-menu .chat-entry:hover,
+.chat-menu .chat-entry.on { background: var(--accent-soft); }
+
+.chat-menu .chat-entry-name {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px;
+  width: auto; background: none; border: none; color: var(--fg);
+  cursor: pointer; font: inherit; font-size: 12px; padding: 7px 0;
+  text-align: left;
+}
+.chat-menu .chat-entry-name:hover { background: none; }
+.chat-menu .chat-entry-title {
+  flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-menu .chat-entry-count { flex: 0 0 auto; white-space: nowrap; font-size: 11px; }
+
+.chat-menu .chat-delete {
+  flex: 0 0 22px; width: 22px; height: 22px; display: flex;
+  align-items: center; justify-content: center; border-radius: 4px;
+  background: none; border: none; cursor: pointer; font-size: 11px;
+  color: var(--fg-muted); visibility: hidden; padding: 0;
+}
+.chat-menu .chat-entry:hover .chat-delete { visibility: visible; }
+.chat-menu .chat-delete:hover { background: var(--error); color: #fff; }
+
+/* Replaces the Save button: a change is already stored by the time this
+   appears, so it acknowledges rather than invites. */
+.save-status {
+  position: absolute; top: 14px; right: 24px; z-index: 5;
+  font-size: 12px; padding: 3px 10px; border-radius: 12px;
+  background: var(--bg-raised); border: 1px solid var(--border);
+  color: var(--fg-muted); transition: opacity 200ms ease;
+}
+.save-status.saved { color: var(--fg-target); border-color: var(--fg-target); }
+.save-status.error { color: var(--error); border-color: var(--error); }
+.settings { position: relative; }
+.settings-note { margin: -14px 0 22px; }
+
+/* -- what it has cost ----------------------------------------------------- */
+
+.spend-anchor { display: inline-flex; align-items: center; }
+.spend {
+  background: none; border: none; color: var(--fg-muted); font: inherit;
+  cursor: pointer; padding: 0 4px; border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.spend:hover { background: var(--accent-soft); color: var(--fg); }
+/* The total is a floor when some calls could not be priced, and the mark says
+   so without spending a word on it. */
+.spend.incomplete .spend-warn { color: var(--warn); margin-left: 1px; }
+
+/* The status bar is at the bottom of the window, so its menu opens upward and
+   is pinned to the right edge -- anchored the way .menu is, it would open off
+   the bottom of the screen. */
+.spend-menu {
+  top: auto; bottom: 100%; left: auto; right: 0; margin-bottom: 6px;
+  min-width: 268px; font-size: 12px; cursor: default;
+}
+.spend-rows > div, .spend-detail > div {
+  display: flex; align-items: baseline; gap: 8px; padding: 3px 8px;
+}
+.spend-rows > div > span:first-child { color: var(--fg-muted); }
+.spend-rows b, .spend-detail b {
+  margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600;
+}
+.spend-rows .strong { font-size: 13px; }
+.spend-detail .name {
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.spend-note { padding: 4px 8px; color: var(--fg-muted); line-height: 1.5; }
+.spend-note code {
+  font-size: 11px; background: var(--bg-input); border-radius: 3px; padding: 0 3px;
+}
+.spend-note.error { color: var(--error); }
+.spend-menu button.link { padding: 4px 8px; }
+
+/* -- the slides themselves ------------------------------------------------ */
+
+/* Same `position: relative` reason as .reader: the sync reads offsetTop. */
+.source-pane {
+  height: 100%; overflow-y: auto; position: relative;
+  /* The same 24px above as the reader, so the first page starts level too. */
+  padding: 24px 12px 60vh; background: var(--bg);
+}
+.source-note {
+  margin: 0 0 10px; padding: 8px 10px; font-size: 12px; line-height: 1.6;
+  color: var(--fg-muted); background: var(--bg-raised);
+  border: 1px solid var(--border); border-radius: 5px;
+}
+/* A page occupies the height the two panes agreed on, with the slide itself
+   pinned to the top of it -- so page N starts level with page N beside it even
+   when one side has far more to say. */
+.source-page { display: flex; flex-direction: column; }
+.source-inner { display: flex; flex-direction: column; gap: 4px; padding-bottom: 36px; }
+.source-page + .source-page .source-inner { padding-top: 36px; }
+.source-index {
+  font-size: 11px; color: var(--fg-muted); font-variant-numeric: tabular-nums;
+}
+.source-page.current .source-index { color: var(--accent); font-weight: 600; }
+
+.source-frame {
+  position: relative; width: 100%; overflow: hidden;
+  background: #fff; border: 1px solid var(--border); border-radius: 4px;
+  /* The drawn fallback sizes its type against the frame's width. */
+  container-type: inline-size;
+}
+.source-page.current .source-frame { border-color: var(--accent); }
+.source-frame > img {
+  display: block; width: 100%; height: 100%; object-fit: contain;
+}
+.source-end {
+  text-align: center; color: var(--fg-muted); font-size: 12px; padding: 12px 0;
+}
+
+/* The page drawn from the extracted geometry, when there is no real render.
+   Always on white: it stands for a slide, and slides are not themed. */
+.approx { position: absolute; inset: 0; color: #111; }
+.approx-image { position: absolute; object-fit: contain; }
+/* One shape, positioned once. Its blocks stack inside it in document order,
+   which is what a bulleted list is. */
+.approx-shape { position: absolute; display: flex; flex-direction: column; }
+.approx-block {
+  line-height: 1.25; white-space: pre-wrap; word-break: break-word;
+}
+.approx-title { font-weight: 600; }
+.approx-caption, .approx-fragment { color: #333; }
+.approx-block.mono { font-family: var(--mono, ui-monospace, Menlo, monospace); }
+
+/* -- reader page, as one of two synced panes ------------------------------ */
+
+/* The section carries the agreed minimum height; .page-inner carries the
+   content, and is what gets measured. Measuring the section instead would feed
+   its own minimum back into the negotiation and the panes would grow forever. */
+
+
+/* -- copying a selection -------------------------------------------------- */
+
+.copy-menu { min-width: 176px; }
+.menu-head {
+  padding: 4px 10px 6px; font-size: 11px; color: var(--fg-muted);
+  border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.copy-menu button { display: flex; align-items: center; gap: 8px; }
+.copy-menu button:disabled { opacity: 0.45; cursor: default; }
+.copy-menu button:disabled:hover { background: none; }
+.copy-menu .tick { margin-left: auto; color: var(--accent); }
+
+/* The scope picker sits in the bar at the top of the ask panel, so its menu
+   drops down and hugs the right edge -- opening upward put it behind the
+   title bar, where it could be seen and not clicked. */
+.scope-menu {
+  position: absolute; top: 100%; right: 0; left: auto;
+  margin-top: 6px; min-width: 168px; z-index: 50;
+}
+.scope-menu button.on { color: var(--accent); font-weight: 600; }
+.menu-note {
+  padding: 4px 10px; font-size: 11px; color: var(--fg-muted); line-height: 1.5;
+  max-width: 200px;
+}
+.selection-bar .spacer { flex: 1; }
+.figure-term.selected { background: var(--accent-soft); border-radius: 3px; }
+
+/* Chapters picked out as the context for a question. Distinct from `.current`,
+   which is where you are reading -- the two are unrelated and regularly differ. */
+.chapter.picked { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.chapter .pick { color: var(--accent); font-size: 11px; }
+.chapters-context {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  font-size: 11px; color: var(--fg-muted);
+  background: var(--bg-raised); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 2;
+}
+.chapters-context .link { margin-left: auto; }
+.selection-bar .scope {
+  display: inline-flex; align-items: center; gap: 6px;
+  color: var(--fg-muted); white-space: nowrap;
+}
+
+/* Drawn icons, at the weight of the text beside them. */
+.tree-icon .icon, .icon { display: block; flex: 0 0 auto; opacity: 0.75; }
+.tree-row .tree-icon { display: flex; align-items: center; }

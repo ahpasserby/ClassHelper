@@ -1,0 +1,52 @@
+[project]
+name = "classhelper"
+version = "0.1.0"
+description = "Read English lecture slides with context-aware translations inline, and ask an AI about any sentence."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "python-pptx>=1.0",
+    "pymupdf>=1.24",
+    # Not optional: a python.org install has no trust anchors of its own, so
+    # without this every HTTPS call fails with a misleading "self-signed
+    # certificate" error. See tls.py.
+    "certifi",
+    # The reader's local server. Small and pure-Python; the alternative is
+    # hand-rolling routing and SSE over http.server, which is more code to get
+    # wrong for no gain.
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    # Multipart form parsing, for files dropped onto the reader.
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27", "playwright>=1.40"]
+
+[project.urls]
+Homepage = "https://github.com/ahpasserby/ClassHelper"
+Source = "https://github.com/ahpasserby/ClassHelper"
+Issues = "https://github.com/ahpasserby/ClassHelper/issues"
+
+[project.scripts]
+classhelper = "classhelper.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The built reader is committed so that installing the package is enough to run
+# it; only contributors changing the UI need Node.
+classhelper = ["web/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    # PyMuPDF's SWIG bindings emit these on import under Python 3.13+.
+    "ignore:builtin type Swig.*has no __module__:DeprecationWarning",
+]

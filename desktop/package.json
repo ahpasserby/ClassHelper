@@ -1,0 +1,35 @@
+{
+  "name": "classhelper-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClassHelper desktop shell",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "build": "electron-vite build",
+    "dev": "electron-vite build && electron .",
+    "watch": "npm --prefix ../web exec -- vite build --watch",
+    "sidecar": "python3 ../scripts/build_sidecar.py",
+    "pack": "electron-vite build && npm run sidecar && electron-builder --dir",
+    "dist": "electron-vite build && npm run sidecar && electron-builder"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "^0.15.18",
+    "@assistant-ui/react-markdown": "^0.14.14",
+    "dockview": "^8.2.0",
+    "dockview-react": "^8.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.6"
+  },
+  "homepage": "https://github.com/ahpasserby/ClassHelper",
+  "license": "MIT",
+  "author": "ahpasserby"
+}

@@ -1,0 +1,38 @@
+appId: dev.classhelper.app
+productName: ClassHelper
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+
+# The frozen Python server travels with the app, so a machine needs neither
+# Python nor pip. Built separately by scripts/build_sidecar.py -- PyInstaller
+# does not cross-compile, so each platform builds its own.
+extraResources:
+  - from: resources/sidecar
+    to: sidecar
+
+mac:
+  category: public.app-category.education
+  # Apple Silicon only. The Python server travels with the app as a binary
+  # frozen by PyInstaller, which does not cross-compile -- an x64 build made
+  # here would ship an arm64 server and fail on the machine it was built for.
+  target:
+    - target: dmg
+      arch: [arm64]
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  # The sidecar is an unsigned helper binary; without this the hardened runtime
+  # refuses to execute it.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+win:
+  target: nsis
+
+linux:
+  target: AppImage
+  category: Education

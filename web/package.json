@@ -1,0 +1,26 @@
+{
+  "name": "classhelper-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "node --test src/*.test.ts"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "^0.15.18",
+    "@assistant-ui/react-markdown": "^0.14.14",
+    "dockview": "^8.2.0",
+    "dockview-react": "^8.2.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}
